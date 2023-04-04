@@ -69,7 +69,7 @@
         cache,
       }:
         with pkgs;
-        with lib.strings; let
+        with pkgs.lib.strings; let
           script = writeScriptBin "cachix-push" (concatStringsSep "\n" [
             # Push flake inputs: as flake inputs are downloaded from the
             # internet, they can disappear
@@ -97,7 +97,7 @@
 
       apps.cachix-pull = {pkgs}:
         with pkgs;
-        with lib.strings; let
+        with pkgs.lib.strings; let
           script = writeScriptBin "cachix-pull" (concatStringsSep "\n" [
             # Optional as we already set substituters above
             # "${pkgs.cachix}/bin/cachix use ${cache}"
