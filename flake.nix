@@ -63,6 +63,52 @@
               in "echo \"${name}${rightpad}\t-- ${description}\""
             ) (zipLists (zipLists names (rpads names)) descs))
           );
+
+      apps.cachix-push = {
+        pkgs,
+        cache,
+      }:
+        with pkgs;
+        with lib.strings; let
+          script = writeScriptBin "cachix-push" (concatStringsSep "\n" [
+            # Push flake inputs: as flake inputs are downloaded from the
+            # internet, they can disappear
+            ''
+              nix flake archive --json \
+                | jq -r '.path,(.inputs|to_entries[].value.path)' \
+                | ${pkgs.cachix}/bin/cachix push ${cache}
+            ''
+            # Pushing runtime closure of all packages in a flake:
+            ''
+              nix build --json \
+                | jq -r '.[].outputs | to_entries[].value' \
+                | ${pkgs.cachix}/bin/cachix push ${cache}
+            ''
+            # Pushing shell environment
+            ''
+              nix develop --profile dev-profile --command 'pwd'
+              ${pkgs.cachix}/bin/cachix push ${cache} dev-profile
+            ''
+          ]);
+        in {
+          type = "app";
+          program = "${script}/bin/cachix-push";
+        };
+
+      apps.cachix-pull = {pkgs}:
+        with pkgs;
+        with lib.strings; let
+          script = writeScriptBin "cachix-pull" (concatStringsSep "\n" [
+            # Optional as we already set substituters above
+            # "${pkgs.cachix}/bin/cachix use ${cache}"
+            "nix build" # build with cachix
+            "nix develop --profile dev-profile --command 'pwd'" # build dev shell with cachix
+            # this last line is important for bootstrapping, especially if you use nix-direnv
+          ]);
+        in {
+          type = "app";
+          program = "${script}/bin/cachix-pull";
+        };
     };
   in {
     inherit lib;
