@@ -1,7 +1,10 @@
 {
+  # light weight way to get nixpkgs lib in a flake
+  inputs.nixlib.url = "github:nix-community/nixpkgs.lib";
   outputs = {
     self,
     nixpkgs,
+    nixlib,
     ...
   } @ inputs: let
     # systems I like
@@ -34,18 +37,17 @@
           else "${p}")
         ps;
       menu = {
-        pkgs,
         packages,
       }:
-        with pkgs.lib.strings;
-        with pkgs.lib.lists; let
+        with nixlib.lib.strings;
+        with nixlib.lib.lists; let
           mx = maxStringLength names;
           names = packageNames packages;
           descs = descriptions packages;
           rpads = map (name: let
             padSize = mx - (stringLength name);
           in
-            pkgs.lib.strings.fixedWidthString padSize " " "");
+            fixedWidthString padSize " " "");
         in
           concatStringsSep "\n" (
             [
@@ -64,30 +66,30 @@
             ) (zipLists (zipLists names (rpads names)) descs))
           );
 
+      # apps should be run with pkgs.callPackage
       apps.cachix-push = {
-        pkgs,
+        writeScriptBin,
         cache,
       }:
-        with pkgs;
-        with pkgs.lib.strings; let
+        with nixlib.lib.strings; let
           script = writeScriptBin "cachix-push" (concatStringsSep "\n" [
             # Push flake inputs: as flake inputs are downloaded from the
             # internet, they can disappear
             ''
               nix flake archive --json \
                 | jq -r '.path,(.inputs|to_entries[].value.path)' \
-                | ${pkgs.cachix}/bin/cachix push ${cache}
+                | cachix push ${cache}
             ''
             # Pushing runtime closure of all packages in a flake:
             ''
               nix build --json \
                 | jq -r '.[].outputs | to_entries[].value' \
-                | ${pkgs.cachix}/bin/cachix push ${cache}
+                | cachix push ${cache}
             ''
             # Pushing shell environment
             ''
               nix develop --profile dev-profile --command 'pwd'
-              ${pkgs.cachix}/bin/cachix push ${cache} dev-profile
+              cachix push ${cache} dev-profile
             ''
           ]);
         in {
@@ -95,12 +97,12 @@
           program = "${script}/bin/cachix-push";
         };
 
-      apps.cachix-pull = {pkgs}:
-        with pkgs;
-        with pkgs.lib.strings; let
+      # apps should be run with pkgs.callPackage
+      apps.cachix-pull = { writeScriptBin }:
+        with nixlib.lib.strings; let
           script = writeScriptBin "cachix-pull" (concatStringsSep "\n" [
             # Optional as we already set substituters above
-            # "${pkgs.cachix}/bin/cachix use ${cache}"
+            # "cachix use ${cache}"
             "nix build" # build with cachix
             "nix develop --profile dev-profile --command 'pwd'" # build dev shell with cachix
             # this last line is important for bootstrapping, especially if you use nix-direnv
@@ -113,7 +115,8 @@
   in {
     inherit lib;
     devShells = lib.forAllSystems (system: let
-      pkgs = import nixpkgs {inherit system;};
+      # https://discourse.nixos.org/t/using-nixpkgs-legacypackages-system-vs-import/17462
+      pkgs = nixpkgs.legacyPackages.${system};
     in {
       default = pkgs.mkShell {
         buildInputs = [pkgs.alejandra];
