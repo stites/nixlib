@@ -2,7 +2,6 @@
   # light weight way to get nixpkgs lib in a flake
   inputs.nixlib.url = "github:nix-community/nixpkgs.lib";
   outputs = {
-    self,
     nixpkgs,
     nixlib,
     ...
@@ -113,7 +112,7 @@
         };
     };
   in {
-    inherit lib;
+    lib = nixlib.lib // { my = lib; };
     devShells = lib.forAllSystems (system: let
       # https://discourse.nixos.org/t/using-nixpkgs-legacypackages-system-vs-import/17462
       pkgs = nixpkgs.legacyPackages.${system};
